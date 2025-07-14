@@ -13,34 +13,28 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/orders")
-@CrossOrigin(origins = "http://localhost:3000", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS}, allowedHeaders = "*")
+@CrossOrigin(origins = "http://localhost:3000")
 public class OrderController {
 
-    @Autowired
-    private OrderService orderService;
+	 @Autowired
+	    private OrderService orderService;
 
-    // Handle OPTIONS requests explicitly
-    @RequestMapping(method = RequestMethod.OPTIONS)
-    public ResponseEntity<?> handleOptions() {
-        return ResponseEntity.ok().build();
-    }
-
-    @PostMapping
-    public ResponseEntity<?> createOrder(
-            @RequestBody OrderRequest orderRequest,
-            @RequestHeader(name = "X-Customer-Id") Integer customerId) {
-        try {
-            if (customerId == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(Map.of("message", "Customer ID is required in X-Customer-Id header"));
-            }
-            OrderModel order = orderService.createOrder(orderRequest, customerId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(order);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("message", "Error creating order: " + e.getMessage()));
-        }
-    }
+	    @PostMapping
+	    public ResponseEntity<?> createOrder(
+	            @RequestBody OrderRequest orderRequest,
+	            @RequestHeader(name = "X-Customer-Id", required = false) Integer customerId) {
+	        try {
+	            if (customerId == null) {
+	                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+	                        .body(Map.of("message", "Customer ID is required in X-Customer-Id header"));
+	            }
+	            OrderModel order = orderService.createOrder(orderRequest, customerId);
+	            return ResponseEntity.status(HttpStatus.CREATED).body(order);
+	        } catch (Exception e) {
+	            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+	                    .body(Map.of("message", "Error creating order: " + e.getMessage()));
+	        }
+	    }
 
     @PostMapping("/{orderId}/confirm-payment")
     public ResponseEntity<?> confirmPayment(

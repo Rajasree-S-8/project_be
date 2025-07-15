@@ -46,9 +46,8 @@ public class CustomerModel implements Serializable {
     }
 
     public String getFullName() {
-        return fullName;
+        return this.fullName;
     }
-
     public void setFullName(String fullName) {
         this.fullName = fullName;
     }

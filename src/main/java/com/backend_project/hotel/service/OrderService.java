@@ -1,14 +1,11 @@
 package com.backend_project.hotel.service;
 
-import com.backend_project.hotel.model.OrderModel;
-import com.backend_project.hotel.model.OrderRequest;
-
-import java.util.List;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.http.ResponseEntity;
 
 public interface OrderService {
-    OrderModel createOrder(OrderRequest orderRequest, Integer customerId);
-    void cancelOrder(Integer orderId, Integer customerId);
-    List<OrderModel> getCustomerOrders(Integer customerId);
-    OrderModel getOrderDetails(Integer orderId, Integer customerId);
-    void confirmPayment(Integer orderId, Integer customerId, Integer paymentId);
+    ResponseEntity<?> createOrder(JsonNode orderRequest, Integer customerId);
+    ResponseEntity<?> processPayment(Integer orderId, JsonNode paymentRequest, Integer customerId);
+    ResponseEntity<?> getOrderDetails(Integer orderId, Integer customerId);
+    ResponseEntity<?> getCustomerOrders(Integer customerId);
 }

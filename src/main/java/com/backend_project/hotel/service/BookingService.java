@@ -17,4 +17,5 @@ public interface BookingService {
     BookingDetailsResponse getBookingDetailsWithPayments(Integer bookingId, Integer customerId);
     PaymentModel processPayment(Integer bookingId, Integer customerId, Double amount, String currency,
                                String paymentMethod, Map<String, String> paymentDetails);
+    List<BookingModel> getAllBookings();
 }

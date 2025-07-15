@@ -10,10 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.logging.Logger;
 
 @Service
@@ -32,6 +29,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Autowired
     private PaymentRepository paymentRepository;
+    
 
     @Override
     @Transactional
@@ -124,7 +122,32 @@ public class BookingServiceImpl implements BookingService {
                 return Collections.emptyList();
             }
             List<BookingModel> bookings = bookingRepository.findByCustomerUserId(customerId);
-            return bookings != null ? bookings : Collections.emptyList();
+            
+            // Simplify the bookings to prevent circular references
+            List<BookingModel> simplifiedBookings = new ArrayList<>();
+            for (BookingModel booking : bookings) {
+                BookingModel simplified = new BookingModel();
+                simplified.setBookingId(booking.getBookingId());
+                
+                // Simplified room
+                RoomModel room = booking.getRoom();
+                RoomModel simpleRoom = new RoomModel();
+                simpleRoom.setRoomId(room.getRoomId());
+                simpleRoom.setRoomNumber(room.getRoomNumber());
+                simpleRoom.setRoomType(room.getRoomType());
+                simpleRoom.setPrice(room.getPrice());
+                simplified.setRoom(simpleRoom);
+                
+                simplified.setCheckInDate(booking.getCheckInDate());
+                simplified.setCheckOutDate(booking.getCheckOutDate());
+                simplified.setGuests(booking.getGuests());
+                simplified.setTotalPrice(booking.getTotalPrice());
+                simplified.setStatus(booking.getStatus());
+                simplified.setBookingDate(booking.getBookingDate());
+                
+                simplifiedBookings.add(simplified);
+            }
+            return simplifiedBookings;
         } catch (Exception e) {
             LOGGER.severe("Error fetching bookings for customer " + customerId + ": " + e.getMessage());
             return Collections.emptyList();
@@ -192,7 +215,36 @@ public class BookingServiceImpl implements BookingService {
                 LOGGER.warning("Unauthorized access to booking " + bookingId + " by customer " + customerId);
                 return null;
             }
-            return booking;
+            
+            // Create simplified booking
+            BookingModel simplified = new BookingModel();
+            simplified.setBookingId(booking.getBookingId());
+            
+            // Simplified room
+            RoomModel room = booking.getRoom();
+            RoomModel simpleRoom = new RoomModel();
+            simpleRoom.setRoomId(room.getRoomId());
+            simpleRoom.setRoomNumber(room.getRoomNumber());
+            simpleRoom.setRoomType(room.getRoomType());
+            simpleRoom.setPrice(room.getPrice());
+            simplified.setRoom(simpleRoom);
+            
+            // Simplified customer
+            CustomerModel customer = booking.getCustomer();
+            CustomerModel simpleCustomer = new CustomerModel();
+            simpleCustomer.setUserId(customer.getUserId());
+            simpleCustomer.setFullName(customer.getFullName());
+            simpleCustomer.setEmail(customer.getEmail());
+            simplified.setCustomer(simpleCustomer);
+            
+            simplified.setCheckInDate(booking.getCheckInDate());
+            simplified.setCheckOutDate(booking.getCheckOutDate());
+            simplified.setGuests(booking.getGuests());
+            simplified.setTotalPrice(booking.getTotalPrice());
+            simplified.setStatus(booking.getStatus());
+            simplified.setBookingDate(booking.getBookingDate());
+            
+            return simplified;
         } catch (Exception e) {
             LOGGER.severe("Error fetching booking details: " + e.getMessage());
             return null;
@@ -203,26 +255,56 @@ public class BookingServiceImpl implements BookingService {
     public BookingDetailsResponse getBookingDetailsWithPayments(Integer bookingId, Integer customerId) {
         try {
             BookingModel booking = bookingRepository.findById(bookingId)
-                    .orElse(null);
-            if (booking == null) {
-                LOGGER.warning("Booking not found: " + bookingId);
-                throw new RuntimeException("Booking not found");
-            }
+                    .orElseThrow(() -> new RuntimeException("Booking not found"));
+
             if (!booking.getCustomer().getUserId().equals(customerId)) {
-                LOGGER.warning("Unauthorized access to booking " + bookingId + " by customer " + customerId);
                 throw new RuntimeException("Unauthorized access to booking details");
             }
+
             BookingDetailsResponse response = new BookingDetailsResponse();
             response.setBookingId(booking.getBookingId());
-            response.setRoom(booking.getRoom());
-            response.setCustomer(booking.getCustomer());
+            
+            // Room info
+            Map<String, Object> roomInfo = new HashMap<>();
+            roomInfo.put("roomId", booking.getRoom().getRoomId());
+            roomInfo.put("roomNumber", booking.getRoom().getRoomNumber());
+            roomInfo.put("roomType", booking.getRoom().getRoomType());
+            roomInfo.put("price", booking.getRoom().getPrice());
+            response.setRoom(roomInfo);
+            
+            // Customer info
+            Map<String, Object> customerInfo = new HashMap<>();
+            customerInfo.put("userId", booking.getCustomer().getUserId());
+            customerInfo.put("name", booking.getCustomer().getFullName());
+            customerInfo.put("email", booking.getCustomer().getEmail());
+            response.setCustomer(customerInfo);
+            
             response.setCheckInDate(booking.getCheckInDate());
             response.setCheckOutDate(booking.getCheckOutDate());
             response.setGuests(booking.getGuests());
             response.setTotalPrice(booking.getTotalPrice());
             response.setStatus(booking.getStatus());
             response.setBookingDate(booking.getBookingDate());
-            response.setPayments(booking.getPayments());
+            
+            // Payments
+            if (booking.getPayments() != null && !booking.getPayments().isEmpty()) {
+                List<Map<String, Object>> paymentsList = new ArrayList<>();
+                for (PaymentModel payment : booking.getPayments()) {
+                    Map<String, Object> paymentMap = new HashMap<>();
+                    paymentMap.put("paymentId", payment.getPaymentId());
+                    paymentMap.put("amount", payment.getAmount());
+                    paymentMap.put("currency", payment.getCurrency());
+                    paymentMap.put("paymentMethod", payment.getPaymentMethod());
+                    paymentMap.put("status", payment.getStatus());
+                    paymentMap.put("paymentDate", payment.getPaymentDate());
+                    paymentMap.put("transactionId", payment.getTransactionId());
+                    paymentMap.put("cardBrand", payment.getCardBrand());
+                    paymentMap.put("cardLastFour", payment.getCardLastFour());
+                    paymentsList.add(paymentMap);
+                }
+                response.setPayments(paymentsList);
+            }
+            
             return response;
         } catch (Exception e) {
             LOGGER.severe("Error fetching booking details with payments: " + e.getMessage());
@@ -230,47 +312,20 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+ // In BookingServiceImpl.java, replace the processPayment method with:
     @Override
     @Transactional
     public PaymentModel processPayment(Integer bookingId, Integer customerId, Double amount, String currency,
-                                      String paymentMethod, Map<String, String> paymentDetails) {
+                                     String paymentMethod, Map<String, String> paymentDetails) {
         try {
-            BookingModel booking = bookingRepository.findById(bookingId)
-                    .orElse(null);
-            if (booking == null) {
-                LOGGER.warning("Booking not found: " + bookingId);
-                throw new RuntimeException("Booking not found");
-            }
-            if (!booking.getCustomer().getUserId().equals(customerId)) {
-                LOGGER.warning("Unauthorized payment attempt for booking " + bookingId + " by customer " + customerId);
-                throw new RuntimeException("Unauthorized payment attempt");
-            }
-            CustomerModel customer = customerRepository.findById(customerId)
-                    .orElse(null);
-            if (customer == null) {
-                LOGGER.warning("Customer not found: " + customerId);
-                throw new RuntimeException("Customer not found");
-            }
-            PaymentModel payment = new PaymentModel();
-            payment.setBooking(booking);
-            payment.setCustomer(customer);
-            payment.setAmount(amount);
-            payment.setCurrency(currency);
-            payment.setPaymentMethod(paymentMethod);
-            payment.setStatus("completed");
-            payment.setPaymentDate(LocalDateTime.now());
-            payment.setTransactionId(UUID.randomUUID().toString());
-            payment.setCardType(paymentDetails.get("cardType"));
-            payment.setCardLastFour(paymentDetails.get("cardNumber").substring(paymentDetails.get("cardNumber").length() - 4));
-            payment.setCardBrand(paymentDetails.get("cardBrand"));
-            PaymentModel savedPayment = paymentRepository.save(payment);
-            booking.setStatus("confirmed");
-            bookingRepository.save(booking);
-            LOGGER.info("Payment processed successfully for booking " + bookingId);
-            return savedPayment;
+            // Delegate to payment service
+            return paymentService.processDirectPayment(bookingId, customerId, amount, currency, 
+                                                     paymentMethod, paymentDetails);
         } catch (Exception e) {
             LOGGER.severe("Error processing payment for booking " + bookingId + ": " + e.getMessage());
             throw new RuntimeException("Failed to process payment: " + e.getMessage());
         }
     }
+    
+   
 }

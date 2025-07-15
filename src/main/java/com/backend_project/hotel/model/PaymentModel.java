@@ -14,6 +14,7 @@ public class PaymentModel {
 
     @ManyToOne
     @JoinColumn(name = "booking_id")
+    
     private BookingModel booking;
 
     @ManyToOne

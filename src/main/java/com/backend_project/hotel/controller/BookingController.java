@@ -15,7 +15,7 @@ import java.util.logging.Logger;
 
 @RestController
 @RequestMapping("/api/bookings")
-@CrossOrigin(origins = "http://localhost:3000", allowedHeaders = "*")
+@CrossOrigin(origins = {"http://localhost:3000", "http://yourfrontenddomain.com"}, allowedHeaders = "*")
 public class BookingController {
 
     private static final Logger LOGGER = Logger.getLogger(BookingController.class.getName());
@@ -27,8 +27,9 @@ public class BookingController {
     public ResponseEntity<?> createBooking(
             @RequestBody BookingRequest bookingRequest,
             @RequestHeader("X-Customer-Id") Integer customerId) {
-        LOGGER.info("Creating booking for customer " + customerId + " with payload: " + bookingRequest);
+        LOGGER.info("Creating booking for customer " + customerId);
         try {
+            // Validate request
             if (bookingRequest.getRoomId() == null) {
                 return ResponseEntity.badRequest()
                         .body(Map.of("message", "Room ID is required"));
@@ -52,7 +53,6 @@ public class BookingController {
             }
 
             ResponseEntity<?> response = bookingService.createBooking(bookingRequest, customerId);
-            LOGGER.info("Booking created successfully: " + response.getBody());
             return response;
         } catch (DateTimeParseException e) {
             LOGGER.warning("Invalid date format: " + e.getMessage());
@@ -60,7 +60,7 @@ public class BookingController {
                     .body(Map.of("message", "Invalid date format. Use YYYY-MM-DD"));
         } catch (Exception e) {
             LOGGER.severe("Error creating booking: " + e.getMessage());
-            return ResponseEntity.status(500)
+            return ResponseEntity.internalServerError()
                     .body(Map.of("message", "Failed to create booking: " + e.getMessage()));
         }
     }
@@ -69,27 +69,27 @@ public class BookingController {
     public ResponseEntity<List<BookingModel>> getCustomerBookings(
             @RequestHeader("X-Customer-Id") Integer customerId) {
         try {
-            LOGGER.info("Fetching bookings for customer " + customerId);
             List<BookingModel> bookings = bookingService.getCustomerBookings(customerId);
-            LOGGER.info("Returning " + bookings.size() + " bookings for customer " + customerId);
             return ResponseEntity.ok(bookings);
         } catch (Exception e) {
-            LOGGER.severe("Unexpected error fetching bookings for customer " + customerId + ": " + e.getMessage());
+            LOGGER.severe("Error fetching bookings: " + e.getMessage());
             return ResponseEntity.ok(Collections.emptyList());
         }
     }
 
     @GetMapping("/{bookingId}/details")
-    public ResponseEntity<?> getBookingDetailsWithPayments(
+    public ResponseEntity<?> getBookingDetails(
             @PathVariable Integer bookingId,
             @RequestHeader("X-Customer-Id") Integer customerId) {
         try {
             BookingDetailsResponse response = bookingService.getBookingDetailsWithPayments(bookingId, customerId);
             return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
-            LOGGER.severe("Error fetching booking details: " + e.getMessage());
-            return ResponseEntity.status(500)
-                    .body(Map.of("message", "Failed to get booking details: " + e.getMessage()));
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("message", "Failed to get booking details"));
         }
     }
 
@@ -98,12 +98,24 @@ public class BookingController {
             @PathVariable Integer bookingId,
             @RequestHeader("X-Customer-Id") Integer customerId) {
         try {
-            ResponseEntity<?> response = bookingService.cancelBooking(bookingId, customerId);
-            return response;
+            return bookingService.cancelBooking(bookingId, customerId);
         } catch (Exception e) {
-            LOGGER.severe("Error cancelling booking: " + e.getMessage());
-            return ResponseEntity.status(500)
-                    .body(Map.of("message", "Failed to cancel booking: " + e.getMessage()));
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("message", "Failed to cancel booking"));
         }
     }
+
+    @GetMapping("/availability")
+    public ResponseEntity<?> checkAvailability(
+            @RequestParam Integer roomId,
+            @RequestParam String checkIn,
+            @RequestParam String checkOut) {
+        try {
+            return bookingService.checkRoomAvailability(roomId, checkIn, checkOut);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("message", "Failed to check availability"));
+        }
+    }
+    
 }

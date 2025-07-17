@@ -299,6 +299,7 @@ public class BookingServiceImpl implements BookingService {
             roomInfo.put("roomType", booking.getRoom().getRoomType());
             roomInfo.put("price", booking.getRoom().getPrice());
             roomInfo.put("acType", booking.getRoom().getAcType());
+            roomInfo.put("imageUrl", booking.getRoom().getImageUrl());
             response.setRoom(roomInfo);
             
             // Customer info

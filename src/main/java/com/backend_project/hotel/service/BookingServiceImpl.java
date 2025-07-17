@@ -3,7 +3,7 @@ package com.backend_project.hotel.service;
 import com.backend_project.hotel.model.*;
 import com.backend_project.hotel.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,14 +29,12 @@ public class BookingServiceImpl implements BookingService {
 
     @Autowired
     private PaymentRepository paymentRepository;
-    
 
     @Override
     @Transactional
     public ResponseEntity<?> createBooking(BookingRequest bookingRequest, Integer customerId) {
         LOGGER.info("Creating booking for customer " + customerId + ", room " + bookingRequest.getRoomId());
         try {
-            // Validate customer
             CustomerModel customer = customerRepository.findById(customerId)
                     .orElse(null);
             if (customer == null) {
@@ -45,7 +43,6 @@ public class BookingServiceImpl implements BookingService {
                         .body(Map.of("message", "User not logged in or invalid customer ID"));
             }
 
-            // Validate room
             RoomModel room = roomRepository.findById(bookingRequest.getRoomId())
                     .orElse(null);
             if (room == null) {
@@ -54,7 +51,6 @@ public class BookingServiceImpl implements BookingService {
                         .body(Map.of("message", "Room not found"));
             }
 
-            // Parse dates
             LocalDate checkInDate;
             LocalDate checkOutDate;
             try {
@@ -66,14 +62,12 @@ public class BookingServiceImpl implements BookingService {
                         .body(Map.of("message", "Invalid date format. Use YYYY-MM-DD"));
             }
 
-            // Check availability
             if (!isRoomAvailable(room.getRoomId(), checkInDate, checkOutDate)) {
                 LOGGER.warning("Room " + room.getRoomId() + " not available for dates " + checkInDate + " to " + checkOutDate);
                 return ResponseEntity.badRequest()
                         .body(Map.of("message", "Room not available for selected dates"));
             }
 
-            // Calculate total price
             long days = ChronoUnit.DAYS.between(checkInDate, checkOutDate);
             if (days <= 0) {
                 LOGGER.warning("Invalid date range: " + checkInDate + " to " + checkOutDate);
@@ -82,7 +76,6 @@ public class BookingServiceImpl implements BookingService {
             }
             double totalPrice = room.getPrice() * days;
 
-            // Create and save booking
             BookingModel booking = new BookingModel();
             booking.setRoom(room);
             booking.setCustomer(customer);
@@ -123,19 +116,18 @@ public class BookingServiceImpl implements BookingService {
             }
             List<BookingModel> bookings = bookingRepository.findByCustomerUserId(customerId);
             
-            // Simplify the bookings to prevent circular references
             List<BookingModel> simplifiedBookings = new ArrayList<>();
             for (BookingModel booking : bookings) {
                 BookingModel simplified = new BookingModel();
                 simplified.setBookingId(booking.getBookingId());
                 
-                // Simplified room
                 RoomModel room = booking.getRoom();
                 RoomModel simpleRoom = new RoomModel();
                 simpleRoom.setRoomId(room.getRoomId());
                 simpleRoom.setRoomNumber(room.getRoomNumber());
                 simpleRoom.setRoomType(room.getRoomType());
                 simpleRoom.setPrice(room.getPrice());
+                simpleRoom.setAcType(room.getAcType());
                 simplified.setRoom(simpleRoom);
                 
                 simplified.setCheckInDate(booking.getCheckInDate());
@@ -155,6 +147,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional
     public ResponseEntity<?> cancelBooking(Integer bookingId, Integer customerId) {
         try {
             BookingModel booking = bookingRepository.findById(bookingId)
@@ -164,23 +157,58 @@ public class BookingServiceImpl implements BookingService {
                 return ResponseEntity.badRequest()
                         .body(Map.of("message", "Booking not found"));
             }
+            
             if (!booking.getCustomer().getUserId().equals(customerId)) {
                 LOGGER.warning("Unauthorized attempt to cancel booking " + bookingId + " by customer " + customerId);
                 return ResponseEntity.status(403)
                         .body(Map.of("message", "Unauthorized to cancel this booking"));
             }
-            if (!booking.getStatus().equals("pending")) {
-                LOGGER.warning("Cannot cancel non-pending booking: " + bookingId);
+            
+            if ("cancelled".equalsIgnoreCase(booking.getStatus())) {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("message", "Only pending bookings can be cancelled"));
+                        .body(Map.of("message", "Booking is already cancelled"));
             }
+            
+            if (booking.getCheckInDate().isBefore(LocalDate.now())) {
+                LOGGER.warning("Cannot cancel booking after check-in date: " + bookingId);
+                return ResponseEntity.badRequest()
+                        .body(Map.of("message", "Cannot cancel booking after check-in date"));
+            }
+            
             booking.setStatus("cancelled");
             RoomModel room = booking.getRoom();
             room.setIsAvailable(true);
             roomRepository.save(room);
             bookingRepository.save(booking);
+            
             LOGGER.info("Booking cancelled successfully: " + bookingId);
-            return ResponseEntity.ok(Map.of("message", "Booking cancelled successfully"));
+            
+            boolean hasPayment = false;
+            double refundAmount = 0;
+            
+            if (booking.getPayments() != null && !booking.getPayments().isEmpty()) {
+                for (PaymentModel payment : booking.getPayments()) {
+                    if ("completed".equalsIgnoreCase(payment.getStatus())) {
+                        hasPayment = true;
+                        break;
+                    }
+                }
+                
+                if (hasPayment) {
+                    refundAmount = booking.getTotalPrice() * 0.8;
+                    return ResponseEntity.ok(Map.of(
+                        "message", "Booking cancelled successfully. Refund of 80% will be processed.",
+                        "refundAmount", refundAmount,
+                        "refundNote", "Refund will be processed to your original payment method within 5-7 business days."
+                    ));
+                }
+            }
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "Booking cancelled successfully",
+                "refundAmount", 0
+            ));
+            
         } catch (Exception e) {
             LOGGER.severe("Error cancelling booking: " + e.getMessage());
             return ResponseEntity.status(500)
@@ -216,25 +244,25 @@ public class BookingServiceImpl implements BookingService {
                 return null;
             }
             
-            // Create simplified booking
             BookingModel simplified = new BookingModel();
             simplified.setBookingId(booking.getBookingId());
             
-            // Simplified room
             RoomModel room = booking.getRoom();
             RoomModel simpleRoom = new RoomModel();
             simpleRoom.setRoomId(room.getRoomId());
             simpleRoom.setRoomNumber(room.getRoomNumber());
             simpleRoom.setRoomType(room.getRoomType());
             simpleRoom.setPrice(room.getPrice());
+            simpleRoom.setAcType(room.getAcType());
             simplified.setRoom(simpleRoom);
             
-            // Simplified customer
             CustomerModel customer = booking.getCustomer();
             CustomerModel simpleCustomer = new CustomerModel();
             simpleCustomer.setUserId(customer.getUserId());
             simpleCustomer.setFullName(customer.getFullName());
             simpleCustomer.setEmail(customer.getEmail());
+            simpleCustomer.setPhoneNumber(customer.getPhoneNumber());
+            simpleCustomer.setAddress(customer.getAddress());
             simplified.setCustomer(simpleCustomer);
             
             simplified.setCheckInDate(booking.getCheckInDate());
@@ -270,6 +298,7 @@ public class BookingServiceImpl implements BookingService {
             roomInfo.put("roomNumber", booking.getRoom().getRoomNumber());
             roomInfo.put("roomType", booking.getRoom().getRoomType());
             roomInfo.put("price", booking.getRoom().getPrice());
+            roomInfo.put("acType", booking.getRoom().getAcType());
             response.setRoom(roomInfo);
             
             // Customer info
@@ -277,6 +306,8 @@ public class BookingServiceImpl implements BookingService {
             customerInfo.put("userId", booking.getCustomer().getUserId());
             customerInfo.put("name", booking.getCustomer().getFullName());
             customerInfo.put("email", booking.getCustomer().getEmail());
+            customerInfo.put("phoneNumber", booking.getCustomer().getPhoneNumber());
+            customerInfo.put("address", booking.getCustomer().getAddress());
             response.setCustomer(customerInfo);
             
             response.setCheckInDate(booking.getCheckInDate());
@@ -312,13 +343,11 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
- // In BookingServiceImpl.java, replace the processPayment method with:
     @Override
     @Transactional
     public PaymentModel processPayment(Integer bookingId, Integer customerId, Double amount, String currency,
                                      String paymentMethod, Map<String, String> paymentDetails) {
         try {
-            // Delegate to payment service
             return paymentService.processDirectPayment(bookingId, customerId, amount, currency, 
                                                      paymentMethod, paymentDetails);
         } catch (Exception e) {
@@ -326,6 +355,4 @@ public class BookingServiceImpl implements BookingService {
             throw new RuntimeException("Failed to process payment: " + e.getMessage());
         }
     }
-    
-   
 }

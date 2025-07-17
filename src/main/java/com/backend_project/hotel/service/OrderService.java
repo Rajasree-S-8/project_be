@@ -8,4 +8,6 @@ public interface OrderService {
     ResponseEntity<?> processPayment(Integer orderId, JsonNode paymentRequest, Integer customerId);
     ResponseEntity<?> getOrderDetails(Integer orderId, Integer customerId);
     ResponseEntity<?> getCustomerOrders(Integer customerId);
+    ResponseEntity<byte[]> generateInvoice(Integer orderId, Integer customerId);
+    ResponseEntity<?> cancelOrder(Integer orderId, Integer customerId);
 }

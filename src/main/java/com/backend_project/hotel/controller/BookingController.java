@@ -2,16 +2,23 @@ package com.backend_project.hotel.controller;
 
 import com.backend_project.hotel.model.*;
 import com.backend_project.hotel.service.BookingService;
+import com.backend_project.hotel.service.PdfService;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -115,6 +122,38 @@ public class BookingController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(Map.of("message", "Failed to check availability"));
+        }
+    }
+    @Autowired
+    private PdfService pdfService;
+    
+    @GetMapping("/{bookingId}/download")
+    public ResponseEntity<byte[]> downloadBookingPdf(
+            @PathVariable Integer bookingId,
+            @RequestHeader("X-Customer-Id") Integer customerId) {
+        try {
+            // Get booking details with all information
+            BookingDetailsResponse bookingDetails = bookingService.getBookingDetailsWithPayments(bookingId, customerId);
+            if (bookingDetails == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            // Generate PDF
+            byte[] pdfBytes = pdfService.generateBookingPdf(bookingDetails);
+
+            // Set response headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setContentDispositionFormData(
+                "attachment", 
+                "booking_confirmation_" + bookingId + ".pdf"
+            );
+            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+            return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+        } catch (Exception e) {
+            LOGGER.severe("Error generating PDF for booking " + bookingId + ": " + e.getMessage());
+            return ResponseEntity.internalServerError().build();
         }
     }
     

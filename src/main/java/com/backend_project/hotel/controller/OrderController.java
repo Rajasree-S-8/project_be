@@ -41,4 +41,18 @@ public class OrderController {
             @RequestHeader("X-Customer-Id") Integer customerId) {
         return orderService.getCustomerOrders(customerId);
     }
+    
+    @GetMapping("/{orderId}/invoice")
+    public ResponseEntity<byte[]> generateInvoice(
+            @PathVariable Integer orderId,
+            @RequestHeader("X-Customer-Id") Integer customerId) {
+        return orderService.generateInvoice(orderId, customerId);
+    }
+
+    @PostMapping("/{orderId}/cancel")
+    public ResponseEntity<?> cancelOrder(
+            @PathVariable Integer orderId,
+            @RequestHeader("X-Customer-Id") Integer customerId) {
+        return orderService.cancelOrder(orderId, customerId);
+    }
 }

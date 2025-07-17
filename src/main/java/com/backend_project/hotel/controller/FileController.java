@@ -17,21 +17,34 @@ public class FileController {
     @Value("${file.upload-dir}")
     private String uploadDir;
 
-    @GetMapping("/{filename:.+}")
+    @GetMapping({"/uploads/{filename:.+}", "/{filename:.+}"})
     public ResponseEntity<Resource> getFile(@PathVariable String filename) {
         try {
             Path filePath = Paths.get(uploadDir).resolve(filename).normalize();
             Resource resource = new UrlResource(filePath.toUri());
-            
-            if (resource.exists() || resource.isReadable()) {
+
+            if (resource.exists() && resource.isReadable()) {
+                String contentType = determineContentType(filename);
                 return ResponseEntity.ok()
-                        .contentType(MediaType.IMAGE_JPEG) // Adjust based on actual image type
+                        .contentType(MediaType.parseMediaType(contentType))
                         .body(resource);
             } else {
                 return ResponseEntity.notFound().build();
             }
         } catch (Exception e) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.internalServerError().build();
         }
+    }
+
+    private String determineContentType(String filename) {
+        String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+        return switch (extension) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "gif" -> "image/gif";
+            case "pdf" -> "application/pdf";
+            case "txt" -> "text/plain";
+            default -> "application/octet-stream"; // Fallback for binary files
+        };
     }
 }

@@ -1,9 +1,7 @@
 package com.backend_project.hotel.service;
 
 import java.util.List;
-
 import org.springframework.http.ResponseEntity;
-
 import com.backend_project.hotel.model.HotelModel;
 
 public interface HotelService {

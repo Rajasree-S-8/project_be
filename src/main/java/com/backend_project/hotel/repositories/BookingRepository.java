@@ -13,5 +13,6 @@ public interface BookingRepository extends JpaRepository<BookingModel, Integer> 
            "AND b.status != 'cancelled' " +
            "AND (b.checkInDate <= :checkOut AND b.checkOutDate >= :checkIn)")
     List<BookingModel> findConflictingBookings(Integer roomId, LocalDate checkIn, LocalDate checkOut);
+
     
 }

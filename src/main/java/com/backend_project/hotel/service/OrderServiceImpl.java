@@ -9,11 +9,24 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import com.itextpdf.text.Document;
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.FontFactory;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.Phrase;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfWriter;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -275,5 +288,131 @@ public class OrderServiceImpl implements OrderService {
         public String getStatus() { return status; }
         public String getTransactionId() { return transactionId; }
         public String getCardLastFour() { return cardLastFour; }
+    }
+    @Override
+    public ResponseEntity<byte[]> generateInvoice(Integer orderId, Integer customerId) {
+        try {
+            Optional<OrderModel> order = orderRepository.findById(orderId);
+            if (order.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            if (!order.get().getCustomer().getUserId().equals(customerId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            // Create PDF document
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            Document document = new Document();
+            PdfWriter.getInstance(document, outputStream);
+            
+            document.open();
+            
+            // Add invoice content
+            document.add(new Paragraph("INVOICE", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18)));
+            document.add(new Paragraph(" "));
+            
+            // Order details
+            document.add(new Paragraph("Order #" + order.get().getOrderId()));
+            document.add(new Paragraph("Date: " + order.get().getOrderDate().format(DateTimeFormatter.ISO_LOCAL_DATE)));
+            document.add(new Paragraph("Status: " + order.get().getStatus()));
+            document.add(new Paragraph(" "));
+            
+            // Customer details
+            CustomerModel customer = order.get().getCustomer();
+            document.add(new Paragraph("Customer: " + customer.getFullName()));
+            document.add(new Paragraph("Delivery Address: " + order.get().getDeliveryAddress()));
+            document.add(new Paragraph(" "));
+            
+            // Items table
+            PdfPTable table = new PdfPTable(4);
+            table.setWidthPercentage(100);
+            table.setSpacingBefore(10f);
+            table.setSpacingAfter(10f);
+            
+            // Table headers
+            table.addCell(new Phrase("Item", FontFactory.getFont(FontFactory.HELVETICA_BOLD)));
+            table.addCell(new Phrase("Price", FontFactory.getFont(FontFactory.HELVETICA_BOLD)));
+            table.addCell(new Phrase("Qty", FontFactory.getFont(FontFactory.HELVETICA_BOLD)));
+            table.addCell(new Phrase("Total", FontFactory.getFont(FontFactory.HELVETICA_BOLD)));
+            
+            // Table rows
+            for (OrderItemModel item : order.get().getItems()) {
+                table.addCell(item.getFood().getName());
+                table.addCell("₹" + item.getPriceAtOrder());
+                table.addCell(String.valueOf(item.getQuantity()));
+                table.addCell("₹" + (item.getPriceAtOrder() * item.getQuantity()));
+            }
+            
+            document.add(table);
+            
+            // Total
+            double subtotal = order.get().getItems().stream()
+                    .mapToDouble(item -> item.getPriceAtOrder() * item.getQuantity())
+                    .sum();
+            
+            document.add(new Paragraph("Subtotal: ₹" + subtotal));
+            document.add(new Paragraph("Delivery Fee: ₹0.00"));
+            document.add(new Paragraph("Tax: ₹0.00"));
+            document.add(new Paragraph(" "));
+            document.add(new Paragraph("Total: ₹" + subtotal));
+            
+            document.close();
+            
+            // Return PDF as response
+            byte[] pdfBytes = outputStream.toByteArray();
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setContentDispositionFormData("attachment", "invoice_" + orderId + ".pdf");
+            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+            
+            return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    @Override
+    @Transactional
+    public ResponseEntity<?> cancelOrder(Integer orderId, Integer customerId) {
+        try {
+            Optional<OrderModel> order = orderRepository.findById(orderId);
+            if (order.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Order with ID " + orderId + " not found");
+            }
+            if (!order.get().getCustomer().getUserId().equals(customerId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Order does not belong to customer with ID " + customerId);
+            }
+
+            // Check if order is cancellable (only pending, processing, or completed orders can be canceled)
+            String currentStatus = order.get().getStatus().toLowerCase();
+            if (!currentStatus.equals("pending") && !currentStatus.equals("processing") && !currentStatus.equals("completed")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Order with ID " + orderId + " cannot be canceled as it is in " + currentStatus + " status");
+            }
+
+            // Update order status to cancelled
+            OrderModel orderToUpdate = order.get();
+            orderToUpdate.setStatus("cancelled");
+            OrderModel updatedOrder = orderRepository.save(orderToUpdate);
+            System.out.println("Updated order: ID=" + updatedOrder.getOrderId() + ", status=" + updatedOrder.getStatus());
+
+            // If payment was completed, initiate a refund
+            List<PaymentsModel> payments = paymentsRepository.findByOrderOrderId(orderId);
+            if (!payments.isEmpty() && "completed".equalsIgnoreCase(payments.get(0).getStatus())) {
+                PaymentsModel payment = payments.get(0);
+                payment.setStatus("refunded");
+                payment.setPaymentDate(LocalDateTime.now());
+                paymentsRepository.save(payment);
+                System.out.println("Refunded payment: ID=" + payment.getPaymentId() + ", status=" + payment.getStatus());
+            }
+
+            return ResponseEntity.ok(new OrderResponseDTO(updatedOrder, "Order cancelled successfully"));
+        } catch (Exception e) {
+            System.err.println("Error cancelling order ID " + orderId + ": " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to cancel order: " + e.getMessage());
+        }
     }
 }

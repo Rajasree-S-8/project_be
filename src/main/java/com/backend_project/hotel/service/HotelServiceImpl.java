@@ -1,11 +1,9 @@
 package com.backend_project.hotel.service;
 
 import java.util.List;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-
 import com.backend_project.hotel.model.HotelModel;
 import com.backend_project.hotel.repositories.HotelRepositories;
 
@@ -14,6 +12,9 @@ public class HotelServiceImpl implements HotelService {
 
     @Autowired
     private HotelRepositories hotelRepositories;
+
+    @Autowired
+    private FileStorageService fileStorageService;
 
     @Override
     public ResponseEntity<HotelModel> addStaff(HotelModel staff) {
@@ -40,6 +41,9 @@ public class HotelServiceImpl implements HotelService {
                     staff.setRole(model.getRole());
                     if (model.getPassword() != null && !model.getPassword().isEmpty()) {
                         staff.setPassword(model.getPassword());
+                    }
+                    if (model.getImage() != null && !model.getImage().isEmpty()) {
+                        staff.setImage(model.getImage());
                     }
                     return ResponseEntity.ok(hotelRepositories.save(staff));
                 })

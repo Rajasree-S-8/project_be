@@ -75,4 +75,8 @@ public class HotelController {
     public ResponseEntity<Void> deleteStaff(@PathVariable Integer id) {
         return hotelService.deleteStaff(id);
     }
+    @GetMapping("/pdf/{id}")
+    public ResponseEntity<byte[]> getStaffPdf(@PathVariable Integer id) {
+        return hotelService.getStaffPdf(id);
+    }
 }

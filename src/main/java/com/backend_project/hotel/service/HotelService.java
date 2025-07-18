@@ -11,4 +11,5 @@ public interface HotelService {
     ResponseEntity<Void> deleteStaff(Integer id);
     ResponseEntity<?> login(String username, String password);
     ResponseEntity<?> restaurantLogin(String username, String password);
+    ResponseEntity<byte[]> getStaffPdf(Integer id);
 }

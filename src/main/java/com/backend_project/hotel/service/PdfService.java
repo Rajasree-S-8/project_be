@@ -256,4 +256,44 @@ public class PdfService {
         valueCell.setPadding(5f);
         table.addCell(valueCell);
     }
+    public byte[] generateStaffPdf(HotelModel staff) throws DocumentException {
+        Document document = new Document();
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        PdfWriter.getInstance(document, outputStream);
+
+        document.open();
+
+        // Add hotel header
+        addHotelHeader(document);
+
+        // Add title
+        Paragraph title = new Paragraph("STAFF DETAILS", TITLE_FONT);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(20f);
+        document.add(title);
+
+        // Add staff information
+        PdfPTable table = new PdfPTable(2);
+        table.setWidthPercentage(100);
+        table.setSpacingBefore(10f);
+        table.setSpacingAfter(15f);
+
+        addSectionHeader(table, "STAFF INFORMATION", 2);
+        addTableRow(table, "Staff ID:", staff.getStaffId().toString());
+        addTableRow(table, "Username:", staff.getUsername());
+        addTableRow(table, "Full Name:", staff.getFullname());
+        addTableRow(table, "Email:", staff.getEmail());
+        addTableRow(table, "Address:", staff.getAddress());
+        addTableRow(table, "Age:", String.valueOf(staff.getAge()));
+        addTableRow(table, "Phone Number:", staff.getPhonenumber());
+        addTableRow(table, "Role:", staff.getRole());
+        
+        document.add(table);
+
+        // Add footer
+        addFooter(document);
+
+        document.close();
+        return outputStream.toByteArray();
+    }
 }

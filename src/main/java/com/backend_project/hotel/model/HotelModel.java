@@ -11,6 +11,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
+import java.time.LocalDate;
+
 @Entity
 @Data
 @ToString
@@ -36,8 +38,8 @@ public class HotelModel {
     @Column(name = "staff_address")
     private String address;
 
-    @Column(name = "staff_age")
-    private Integer age;
+    @Column(name = "staff_date_of_birth")
+    private LocalDate dateOfBirth;
 
     @Column(name = "staff_phonenumber")
     private String phonenumber;
@@ -48,6 +50,18 @@ public class HotelModel {
     @Column(name = "staff_role")
     private String role;
 
-    @Column(name = "staff_image") // New field for image filename
+    @Column(name = "staff_image")
     private String image;
+
+    @Column(name = "staff_joining_date")
+    private LocalDate joiningDate;
+
+    @Column(name = "staff_experience")
+    private Integer experience;
+
+    @Column(name = "staff_qualification")
+    private String qualification;
+    
+    @Column(name = "staff_age") // Added age field
+    private Integer age;
 }

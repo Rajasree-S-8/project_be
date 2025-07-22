@@ -1,8 +1,10 @@
 package com.backend_project.hotel.service;
 
-import java.util.List;
-import org.springframework.http.ResponseEntity;
 import com.backend_project.hotel.model.HotelModel;
+import com.itextpdf.text.DocumentException;
+import org.springframework.http.ResponseEntity;
+
+import java.util.List;
 
 public interface HotelService {
     ResponseEntity<HotelModel> addStaff(HotelModel model);
@@ -11,5 +13,6 @@ public interface HotelService {
     ResponseEntity<Void> deleteStaff(Integer id);
     ResponseEntity<?> login(String username, String password);
     ResponseEntity<?> restaurantLogin(String username, String password);
-    ResponseEntity<byte[]> getStaffPdf(Integer id);
+    byte[] generateStaffPdf(Integer id) throws DocumentException;
+    byte[] generateAllStaffPdf() throws DocumentException;
 }

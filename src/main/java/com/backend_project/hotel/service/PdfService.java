@@ -256,6 +256,8 @@ public class PdfService {
         valueCell.setPadding(5f);
         table.addCell(valueCell);
     }
+ // Add these methods to your existing PdfService class
+
     public byte[] generateStaffPdf(HotelModel staff) throws DocumentException {
         Document document = new Document();
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -267,28 +269,13 @@ public class PdfService {
         addHotelHeader(document);
 
         // Add title
-        Paragraph title = new Paragraph("STAFF DETAILS", TITLE_FONT);
+        Paragraph title = new Paragraph("STAFF PROFILE", TITLE_FONT);
         title.setAlignment(Element.ALIGN_CENTER);
         title.setSpacingAfter(20f);
         document.add(title);
 
-        // Add staff information
-        PdfPTable table = new PdfPTable(2);
-        table.setWidthPercentage(100);
-        table.setSpacingBefore(10f);
-        table.setSpacingAfter(15f);
-
-        addSectionHeader(table, "STAFF INFORMATION", 2);
-        addTableRow(table, "Staff ID:", staff.getStaffId().toString());
-        addTableRow(table, "Username:", staff.getUsername());
-        addTableRow(table, "Full Name:", staff.getFullname());
-        addTableRow(table, "Email:", staff.getEmail());
-        addTableRow(table, "Address:", staff.getAddress());
-        addTableRow(table, "Age:", String.valueOf(staff.getAge()));
-        addTableRow(table, "Phone Number:", staff.getPhonenumber());
-        addTableRow(table, "Role:", staff.getRole());
-        
-        document.add(table);
+        // Add staff details
+        addStaffDetails(document, staff);
 
         // Add footer
         addFooter(document);
@@ -296,4 +283,68 @@ public class PdfService {
         document.close();
         return outputStream.toByteArray();
     }
+
+    public byte[] generateAllStaffPdf(List<HotelModel> staffList) throws DocumentException {
+        Document document = new Document(PageSize.A4.rotate());
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        PdfWriter.getInstance(document, outputStream);
+
+        document.open();
+
+        // Add hotel header
+        addHotelHeader(document);
+
+        // Add title
+        Paragraph title = new Paragraph("STAFF MANAGEMENT REPORT", TITLE_FONT);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(20f);
+        document.add(title);
+
+        // Add generation info
+        Paragraph info = new Paragraph(
+            "Generated on: " + java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")) + 
+            " | Total Staff: " + staffList.size(), 
+            SMALL_FONT);
+        info.setAlignment(Element.ALIGN_CENTER);
+        info.setSpacingAfter(15f);
+        document.add(info);
+
+        // Add staff table
+        addAllStaffTable(document, staffList);
+
+        // Add summary
+        addStaffSummary(document, staffList);
+
+        // Add footer
+        addFooter(document);
+
+        document.close();
+        return outputStream.toByteArray();
+    }
+
+    private void addStaffDetails(Document document, HotelModel staff) throws DocumentException {
+        PdfPTable table = new PdfPTable(2);
+        table.setWidthPercentage(80);
+        table.setHorizontalAlignment(Element.ALIGN_CENTER);
+        table.setSpacingBefore(10f);
+        table.setSpacingAfter(20f);
+
+        // Section header
+        addSectionHeader(table, "STAFF INFORMATION", 2);
+
+        // Staff details
+        addTableRow(table, "Staff ID:", staff.getStaffId().toString());
+        addTableRow(table, "Username:", staff.getUsername());
+        addTableRow(table, "Full Name:", staff.getFullname());
+        addTableRow(table, "Email:", staff.getEmail());
+        addTableRow(table, "Address:", staff.getAddress());
+        addTableRow(table, "Age:", staff.getAge() != null ? staff.getAge().toString() : "N/A");
+        addTableRow(table, "Phone:", staff.getPhonenumber());
+        addTableRow(table, "Role:", staff.getRole());
+
+        document.add(table);
+    }
+
+   
+
 }
